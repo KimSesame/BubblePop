@@ -7,6 +7,8 @@ using Firebase.Auth;
 using Firebase.Extensions;
 using Photon.Pun;
 using System;
+using Google;
+using System.Threading.Tasks;
 
 public class LoginPanel : BaseUI
 {
@@ -228,8 +230,8 @@ public class LoginPanel : BaseUI
         // 확인/닫기버튼
         GetUI<Button>("NotificationButton").onClick.AddListener(CloseNotification);
 
-
-
+        // 구글로그인
+        //GetUI<Button>("GoogleLogin").onClick.AddListener(GoogleLogin()); 
 
 
         // 종료버튼
@@ -269,6 +271,76 @@ public class LoginPanel : BaseUI
         _signUpPanel.SetActive(true);
         SoundManager.Instance.PlaySFX(SoundManager.E_SFX.CLICK);
     }
+
+    public void GoogleLogin(bool linkWithCurrentAnonUser)
+    {
+        Debug.Log("GoogleLogin 테스트로그");
+        Firebase.Auth.FirebaseAuth mAuth = Firebase.Auth.FirebaseAuth.DefaultInstance;
+        GoogleSignIn.Configuration = new GoogleSignInConfiguration
+        {
+            RequestIdToken = true,
+            // Copy this value from the google-service.json file.
+            // oauth_client with type == 3
+            WebClientId = "[YOUR API CLIENT ID HERE].apps.googleusercontent.com"
+        };
+
+        Task<GoogleSignInUser> signIn = GoogleSignIn.DefaultInstance.SignIn();
+
+        TaskCompletionSource<FirebaseUser> signInCompleted = new TaskCompletionSource<FirebaseUser>();
+        signIn.ContinueWith(task =>
+        {
+            if (task.IsCanceled)
+            {
+                signInCompleted.SetCanceled();
+            }
+            else if (task.IsFaulted)
+            {
+                signInCompleted.SetException(task.Exception);
+            }
+            else
+            {
+                Credential credential = Firebase.Auth.GoogleAuthProvider.GetCredential(((Task<GoogleSignInUser>)task).Result.IdToken, null);
+                if (linkWithCurrentAnonUser)
+                {
+                    mAuth.SignInWithCredentialAsync(credential).ContinueWith(HandleLoginResult);
+                   // mAuth.CurrentUser.LinkWithCredentialAsync(credential).ContinueWith(HandleLoginResult);
+                }
+                else
+                {
+                    SignInWithCredential(credential);
+                }
+            }
+        });
+    }
+    private void SignInWithCredential(Credential credential)
+    {
+        Firebase.Auth.FirebaseAuth mAuth = Firebase.Auth.FirebaseAuth.DefaultInstance;
+        if (mAuth != null)
+        {
+            mAuth.SignInWithCredentialAsync(credential).ContinueWith(HandleLoginResult);
+        }
+    }
+    private void HandleLoginResult(Task<FirebaseUser> task)
+    {
+        if (task.IsCanceled)
+        {
+            UnityEngine.Debug.LogError("SignInWithCredentialAsync was canceled.");
+            return;
+        }
+        if (task.IsFaulted)
+        {
+            UnityEngine.Debug.LogError("SignInWithCredentialAsync encountered an error: " + task.Exception.InnerException.Message);
+            return;
+        }
+        else
+        {
+
+            FirebaseUser newUser = task.Result;
+            UnityEngine.Debug.Log($"User signed in successfully: {newUser.DisplayName} ({newUser.UserId})");
+        }
+    }
+
+
     public void Login()
     {
         Debug.Log("LoginButton 테스트 로그");
